@@ -1,11 +1,15 @@
 package godefault
 
 import (
+	"encoding/base64"
+	"os"
 	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/sonnt85/gogmap"
 )
 
 // Applies the default values to the struct object, the struct type must have
@@ -22,21 +26,80 @@ import (
 //
 //	 foo := &ExampleBasic{}
 //	 SetDefaults(foo)
-func SetDefaults(variable interface{}) {
-	getDefaultFiller().Fill(variable)
+func SetDefaults(variable interface{}, tagNames ...string) {
+	getDefaultFiller(tagNames...).Fill(variable)
 }
 
 var defaultFiller *Filler = nil
 
-func getDefaultFiller() *Filler {
+func getDefaultFiller(tagNames ...string) *Filler {
 	if defaultFiller == nil {
-		defaultFiller = newDefaultFiller()
+		defaultFiller = newDefaultFiller(tagNames...)
 	}
 
 	return defaultFiller
 }
 
-func newDefaultFiller() *Filler {
+func parseEnvString(envStr string) (retstr string) {
+	// envs|[envkey|]env1,env1_value_[base64]|env2,,env2_value_[base64]|...
+	retstr = envStr
+	prefix := "envs|"
+	if strings.HasPrefix(envStr, prefix) {
+		envStr = envStr[len(prefix):]
+	} else {
+		return
+	}
+
+	parts := strings.Split(envStr, "|")
+	if len(parts) < 2 {
+		return
+	}
+
+	// Extract the environment key from the first part (before the colon)
+	separatorChar := ","
+	key := parts[0]
+	if strings.Contains(key, separatorChar) {
+		key = "EnvType"
+	} else {
+		parts = parts[1:]
+	}
+	// value := os.Getenv(key)
+	value := gogmap.Get(key)
+	if value == "" {
+		value = os.Getenv(key)
+	}
+	defaultValue := ""
+	// Loop through the remaining parts to find the matching environment variable
+	for i, part := range parts {
+		envValues := strings.Split(part, separatorChar)
+
+		if len(envValues) != 2 && len(envValues) != 3 {
+			return
+		}
+		if i == 0 {
+			defaultValue = envValues[1]
+			if value == "" {
+				value = envValues[0]
+			}
+		}
+		// Check if the current environment key matches the specified key
+		if envValues[0] == value {
+			if len(envValues) == 3 {
+				if envValues[1] == "" {
+					if decodedBytes, err := base64.StdEncoding.DecodeString(envValues[2]); err == nil {
+						return string(decodedBytes)
+					}
+				}
+				return
+			}
+			return envValues[1]
+
+		}
+	}
+	return defaultValue
+}
+
+func newDefaultFiller(tagNames ...string) *Filler {
 	funcs := make(map[reflect.Kind]FillerFunc, 0)
 	funcs[reflect.Bool] = func(field *FieldData) {
 		value, _ := strconv.ParseBool(field.TagValue)
@@ -82,7 +145,10 @@ func newDefaultFiller() *Filler {
 		if field.TagValue == "-," {
 			field.TagValue = "-"
 		}
-		tagValue := parseDateTimeString(field.TagValue)
+		tagValue := parseEnvString(field.TagValue)
+		if tagValue == field.TagValue {
+			tagValue = parseDateTimeString(field.TagValue)
+		}
 		field.Value.SetString(tagValue)
 	}
 
@@ -137,8 +203,11 @@ func newDefaultFiller() *Filler {
 			}
 		}
 	}
-
-	return &Filler{FuncByKind: funcs, FuncByType: types, Tag: "default"}
+	tagname := "default"
+	if len(tagNames) != 0 {
+		tagname = tagNames[0]
+	}
+	return &Filler{FuncByKind: funcs, FuncByType: types, Tag: tagname}
 }
 
 func parseDateTimeString(data string) string {

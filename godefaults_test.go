@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sonnt85/gogmap"
+
 	"bou.ke/monkey"
 	"github.com/sonnt85/gosutils/ppjson"
 	. "gopkg.in/check.v1"
@@ -141,17 +143,18 @@ func (s *DefaultsSuite) BenchmarkLogic(c *C) {
 func TestSetDefaults(t *testing.T) {
 	type Child struct {
 		Name string `default:"-,"`
-		Age  int    `default:"12"`
+		Age  int    `default:"envs|dev,11|prod,12|stg,13"`
 	}
 
 	type Parent struct {
 		Childrens []Child
 		Children  Child  `default:""`
-		Variable  string `default:"variable"`
+		Variable  string `default:"envs|EnvType1|dev,MTE=|prod,12|stg,aBcDeFgHiJkLmNoP"`
 	}
 
 	var parent Parent
-	fmt.Println(ppjson.ToString(parent))
+	gogmap.Set("EnvType1", "stg")
+	// fmt.Println(ppjson.ToString(parent))
 	SetDefaults(&parent)
 	fmt.Println(ppjson.ToString(parent))
 
