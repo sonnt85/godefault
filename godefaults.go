@@ -2,6 +2,7 @@ package godefault
 
 import (
 	"encoding/base64"
+	"fmt"
 	"os"
 	"reflect"
 	"regexp"
@@ -40,6 +41,31 @@ func getDefaultFiller(tagNames ...string) *Filler {
 	return defaultFiller
 }
 
+// parseEnvString performs parsing of an input string based on a specific format
+// and returns the corresponding value based on the following rules:
+//
+// The input string is expected to be in the following format:
+//
+//			envs|[envkey|]env1,env1_value_[base64]|env2,,env2_value_[base64]|...
+//
+//		  - The input string begins with the "envs|" prefix, which indicates that it contains
+//		    a list of environment variable definitions.
+//	  	  - If it is Envs then chain |, encrypt, and || encryption for |
+//		  - Each environment variable definition is separated by the "|" character.
+//		  - Each definition consists of two or three parts, separated by commas:
+//		  - The first part is the environment variable key (envkey).
+//		  - The second part is the environment variable value (env1_value).
+//		  - Optionally, the third part is a base64-encoded value enclosed in square brackets,
+//		    e.g., "[base64]", which indicates that the value needs to be base64 decoded.
+//
+// The function will return the value of the specified environment variable, and if it's
+// base64 encoded, it will decode the value before returning it.
+//
+// Input parameters:
+// - envStr: The environment variable string to parse.
+//
+// Return value:
+// - retstr: The value of the parsed environment variable, or a default value if not found.
 func parseEnvString(envStr string) (retstr string) {
 	// envs|[envkey|]env1,env1_value_[base64]|env2,,env2_value_[base64]|...
 	retstr = envStr
@@ -49,14 +75,23 @@ func parseEnvString(envStr string) (retstr string) {
 	} else {
 		return
 	}
-
-	parts := strings.Split(envStr, "|")
+	envStrTmp := strings.ReplaceAll(envStr, "|,", "__orcomma__")
+	envStrTmp = strings.ReplaceAll(envStrTmp, "||", "__oror__")
+	parts := strings.Split(envStrTmp, "|")
+	if envStrTmp != envStr {
+		defer func() {
+			retstr = strings.ReplaceAll(retstr, "__oror__", "|")
+			retstr = strings.ReplaceAll(retstr, "__orcomma__", ",")
+		}()
+	}
+	// parts := strings.Split(envStr, "|")
 	if len(parts) < 2 {
 		return
 	}
 
 	// Extract the environment key from the first part (before the colon)
 	separatorChar := ","
+
 	key := parts[0]
 	if strings.Contains(key, separatorChar) {
 		key = "EnvType"
@@ -92,11 +127,40 @@ func parseEnvString(envStr string) (retstr string) {
 				}
 				return
 			}
-			return envValues[1]
+			retstr = envValues[1]
+			return
 
 		}
 	}
-	return defaultValue
+	retstr = defaultValue
+	return
+}
+
+// parseDateTimeString parses a string consisting of two parts: a layout and a time value.
+// If a layout is provided, it uses that layout to parse the time value. If no layout is
+// provided, it uses the default layout "2006-01-02 15:04:05".
+func parseDateTime(dateTimeString string) (time.Time, error) {
+	// Split the string into layout and value using a space as the separator
+	// 	parts := strings.Split(dateTimeString, " ")
+	parts := strings.Fields(dateTimeString)
+
+	if len(parts) < 2 {
+		return time.Time{}, fmt.Errorf("invalid string: %s", dateTimeString)
+	}
+
+	layout := "2006-01-02 15:04:05"
+	value := dateTimeString
+	if len(parts) > 2 {
+		layout = strings.Join(parts[len(parts)/2:], " ")
+		value = strings.Join(parts[:len(parts)/2], " ")
+	}
+
+	parsedTime, err := time.Parse(layout, value)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	return parsedTime, nil
 }
 
 func newDefaultFiller(tagNames ...string) *Filler {
@@ -162,7 +226,10 @@ func newDefaultFiller(tagNames ...string) *Filler {
 		d, _ := time.ParseDuration(field.TagValue)
 		field.Value.Set(reflect.ValueOf(d))
 	}
-
+	types["time.Time"] = func(field *FieldData) {
+		d, _ := parseDateTime(field.TagValue)
+		field.Value.Set(reflect.ValueOf(d))
+	}
 	funcs[reflect.Slice] = func(field *FieldData) {
 		k := field.Value.Type().Elem().Kind()
 		switch k {
@@ -187,10 +254,12 @@ func newDefaultFiller(tagNames ...string) *Filler {
 			if matchs[1] == "" {
 				field.Value.Set(reflect.MakeSlice(field.Value.Type(), 0, 0))
 			} else {
-				defaultValue := strings.Split(matchs[1], ",")
+				match1 := strings.ReplaceAll(matchs[1], "|,", "__orcomma__") //
+				defaultValue := strings.Split(match1, ",")
 				result := reflect.MakeSlice(field.Value.Type(), len(defaultValue), len(defaultValue))
 				for i := 0; i < len(defaultValue); i++ {
 					itemValue := result.Index(i)
+					defaultValue[i] = strings.ReplaceAll(defaultValue[i], "__orcomma__", ",")
 					item := &FieldData{
 						Value:    itemValue,
 						Field:    reflect.StructField{},

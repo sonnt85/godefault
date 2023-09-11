@@ -108,12 +108,10 @@ func (f *Filler) SetDefaultValue(field *FieldData) {
 			return
 		}
 	}
-
-	return
 }
 
 func (f *Filler) getFunctionByName(field *FieldData) FillerFunc {
-	if f, ok := f.FuncByName[field.Field.Name]; ok == true {
+	if f, ok := f.FuncByName[field.Field.Name]; ok {
 		return f
 	}
 
@@ -121,7 +119,7 @@ func (f *Filler) getFunctionByName(field *FieldData) FillerFunc {
 }
 
 func (f *Filler) getFunctionByType(field *FieldData) FillerFunc {
-	if f, ok := f.FuncByType[GetTypeHash(field.Field.Type)]; ok == true {
+	if f, ok := f.FuncByType[GetTypeHash(field.Field.Type)]; ok {
 		return f
 	}
 
@@ -129,7 +127,7 @@ func (f *Filler) getFunctionByType(field *FieldData) FillerFunc {
 }
 
 func (f *Filler) getFunctionByKind(field *FieldData) FillerFunc {
-	if f, ok := f.FuncByKind[field.Field.Type.Kind()]; ok == true {
+	if f, ok := f.FuncByKind[field.Field.Type.Kind()]; ok {
 		return f
 	}
 
