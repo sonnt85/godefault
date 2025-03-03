@@ -27,6 +27,23 @@ import (
 //
 //	 foo := &ExampleBasic{}
 //	 SetDefaults(foo)
+//
+// The input string in tag default is expected to be in the following format:
+//
+//			envs|[envkey|]env1,env1_value_[base64]|env2,,env2_value_[base64]|...
+//
+//		  - The input string begins with the "envs|" prefix, which indicates that it contains
+//		    a list of environment variable definitions.
+//	  	  - If it is Envs then chain |, encrypt, and || encryption for |, \" encryption for "
+//		  - Each environment variable definition is separated by the "|" character.
+//		  - Each definition consists of two or three parts, separated by commas:
+//		  - The first part is the environment variable key (envkey).
+//		  - The second part is the environment variable value (env1_value).
+//		  - Optionally, the third part is a base64-encoded value enclosed in square brackets,
+//		    e.g., "[base64]", which indicates that the value needs to be base64 decoded.
+//
+// The function will return the value of the specified environment variable, and if it's
+// base64 encoded, it will decode the value before returning it.
 func SetDefaults(variable interface{}, tagNames ...string) {
 	getDefaultFiller(tagNames...).Fill(variable)
 }

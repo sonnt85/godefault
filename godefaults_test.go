@@ -149,9 +149,9 @@ func TestSetDefaults(t *testing.T) {
 	type Parent struct {
 		Childrens   []Child
 		Children    Child     `default:""`
-		StrignArray []string  `default:"[1,|,|b]"`
+		StrignArray []string  `default:"[1, a ||, b ,|b]"`
 		Variable    string    `default:"envs|EnvType1|dev,MTE=|prod,12|stg,aBc|,||DeFgHiJkLmNoP"`
-		StringVar   string    `default:"\"|ab12\\3"`
+		StringVar   string    `default:"\"|ab12\\"`
 		Time        time.Time `default:"2023-01-05 15:04:05"`                  //time:15,04,05
 		TimeStr     string    `default:"{{date:2006,01,1}} {{time:15,04,05}}"` //time:15,04,05
 
